@@ -25,7 +25,7 @@ public class LoginService : ILoginService
 
     public async Task<LoginResponse> GetLoginDataAsync(LoginRequest request)
     {
-        // Validate input
+        // Validate input Data
         if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
         {
             throw new ArgumentException("Username and password are required.");

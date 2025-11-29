@@ -1,16 +1,11 @@
-﻿using SunniNooriMasjidAPI.Data.Entities;
+﻿using Microsoft.EntityFrameworkCore;
+using SunniNooriMasjidAPI.Data.Entities;
 using SunniNooriMasjidAPI.Data.MasjidDbContext;
+using SunniNooriMasjidAPI.Features.Models.YearlyIncome.DTO;
+using SunniNooriMasjidAPI.Features.Models.YearlyIncome.Request;
 using SunniNooriMasjidAPI.Features.Models.YearlyIncome.Response;
 using SunniNooriMasjidAPI.Interfaces;
 using SunniNooriMasjidAPI.Interfaces.IYearlyIncome;
-using Microsoft.EntityFrameworkCore;
-using System.Linq;
-using System.Threading.Tasks;
-using SunniNooriMasjidAPI.Features.Models.VillageMember.DTO;
-using SunniNooriMasjidAPI.Features.Models.YearlyIncome.DTO;
-using SunniNooriMasjidAPI.Features.Models.SadqaMember.Request;
-using SunniNooriMasjidAPI.Features.Models.SadqaMember.Response;
-using SunniNooriMasjidAPI.Features.Models.YearlyIncome.Request;
 
 namespace SunniNooriMasjidAPI.Services.YearlyIncomeService
 {
@@ -22,6 +17,7 @@ namespace SunniNooriMasjidAPI.Services.YearlyIncomeService
         private readonly IRepository<Mohalla> _mohallaRepository;
         private readonly IRepository<Masjidgullak> _gullakRepository;
         private readonly IRepository<Masjidincome> _masjidIncome;
+        private readonly IRepository<User> _userRepository;
         private readonly SunniNooriMasjidDbContext _masjidDBContext;
 
 
@@ -29,7 +25,7 @@ namespace SunniNooriMasjidAPI.Services.YearlyIncomeService
             IRepository<Member> memberRepository,
             IRepository<Villagemember> villagememberRepository,
             IRepository<Mohalla> mohallaRepository,
-            //IRepository<Masjidyearlyincome> yearlyincomeRepository,
+            IRepository<User> userRepository,
             IRepository<Masjidincome> masjidIncome,
             IRepository<Masjidgullak> gullakRepository,
             SunniNooriMasjidDbContext masjidDBContext)
@@ -37,7 +33,7 @@ namespace SunniNooriMasjidAPI.Services.YearlyIncomeService
             _memberRepository = memberRepository;
             _villageMemberRepository = villagememberRepository;
             _mohallaRepository = mohallaRepository;
-           // _yearlyincomeRepository = yearlyincomeRepository;
+            _userRepository = userRepository;
             _gullakRepository = gullakRepository;
             _masjidIncome = masjidIncome;
             _masjidDBContext = masjidDBContext;
@@ -99,7 +95,10 @@ namespace SunniNooriMasjidAPI.Services.YearlyIncomeService
 
         public async Task<List<MasjidYearlyIncomeDTO>> GetVillageMasjidYearlyIncomeAsync()
         {
-            // Fetch all members and their payments without filtering by year.
+            // Load all users first to map CreatedBy → Username
+            var users = await _userRepository.GetAllAsync();
+            var userDict = users.ToDictionary(x => x.Id, x => x.Username);
+
             var query = _masjidDBContext.VillageMembersPayments
                 .Select(m => new MasjidYearlyIncomeDTO
                 {
@@ -107,6 +106,7 @@ namespace SunniNooriMasjidAPI.Services.YearlyIncomeService
                     FirstName = m.FirstName,
                     LastName = m.LastName,
                     FatherName = m.FatherName,
+
                     MasjidIncome = m.Masjidincomes
                         .Select(p => new MasjidIncomeDTO
                         {
@@ -114,14 +114,22 @@ namespace SunniNooriMasjidAPI.Services.YearlyIncomeService
                             MasjidAmount = p.MasjidAmount,
                             QabristanAmount = p.QabristanAmount,
                             MasjidProgramAmount = p.MasjidProgamAmount,
-                            PaymentDate = p.PaymentDate.ToString("yyyy-MM-dd")
-        })
+                            PaymentDate = p.PaymentDate.ToString("yyyy-MM-dd"),
+
+                            // 👇 Main Logic: Convert CreatedBy → Username (PaidTo)
+                            PaidTo = p.CreatedBy != null
+                                     && userDict.ContainsKey(p.CreatedBy.Value)
+                                     ? userDict[p.CreatedBy.Value]
+                                     : "Unknown"
+                        })
                         .ToList()
                 });
 
-            // Execute the query and return the results as a list.
             return await query.ToListAsync();
         }
+
+
+
 
         public async Task<MasjidIncomeResponseModel> AddMasjidIncomePaymentAsync(MasjidIncomeRequestModel request)
         {

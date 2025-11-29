@@ -16,13 +16,14 @@ namespace SunniNooriMasjidAPI.Services.VillageMemberService
         private readonly IRepository<VillageMembersPayment> _villagememberPaymentRepository;
         private readonly IRepository<SalaryPayment> _salaryPaymentRepository;
         private readonly IRepository<Mohalla> _mohallaRepository;
+        private readonly IRepository<Member> _memberRepository;
         private readonly SunniNooriMasjidDbContext _masjidDBContext;  // DbContext for accessing Mohalla table
 
         // Injecting DbContext in constructor
-        public VillageMemberService(IRepository<Villagemember> villagememberRepository, IRepository<Mohalla> mohallaRepository, IRepository<SalaryPayment> salaryPaymentRepository,
+        public VillageMemberService(IRepository<Member> memberRepository, IRepository<Mohalla> mohallaRepository, IRepository<SalaryPayment> salaryPaymentRepository,
             IRepository<VillageMembersPayment> villagememberPaymentRepository, SunniNooriMasjidDbContext context)
         {
-            //_villagememberRepository = villagememberRepository;
+            _memberRepository = memberRepository;
             _villagememberPaymentRepository = villagememberPaymentRepository;
             _mohallaRepository = mohallaRepository;
             _salaryPaymentRepository = salaryPaymentRepository;
@@ -32,24 +33,37 @@ namespace SunniNooriMasjidAPI.Services.VillageMemberService
         public async Task<IEnumerable<VillageMemberResponseModel>> GetVillageMemberDataAsync()
         {
             // Use the repository to fetch data
-            var villagememberData = await _villagememberPaymentRepository.GetAllAsync();
+            var villageMemberData = await _villagememberPaymentRepository.GetAllAsync();
+            var mohallaData = await _masjidDBContext.Set<Mohalla>().ToListAsync();
+            var memberData = await _memberRepository.GetAllAsync();  // committee members
 
-            // Perform the join with the Mohalla table
-            var villageMembersWithMohalla = villagememberData.Join(
-                _masjidDBContext.Set<Mohalla>(),  // Access the Mohalla DbSet from the DbContext
-                vm => vm.MohallaId,               // Key selector for Villagemember
-                m => m.MohallaId,                 // Key selector for Mohalla
-                (vm, m) => new VillageMemberResponseModel
+            var villageMembersWithMohalla = villageMemberData
+                .Join(mohallaData,
+                      vm => vm.MohallaId,
+                      m => m.MohallaId,
+                      (vm, m) => new { vm, m })
+                .Select(v => new VillageMemberResponseModel
                 {
-                    Id = vm.MemberId,
-                    FirstName = vm.FirstName,
-                    LastName = vm.LastName,
-                    FatherName = vm.FatherName,
-                    MohallaId = vm.MohallaId,
-                    MohallaName = m.MohallaName,  // Assuming 'MohallaName' is the correct property name in Mohalla
-                    MobileNumber = vm.MobileNumber,
-                    UserId = vm.MemberId
-                }).ToList();
+                    Id = v.vm.MemberId,
+                    FirstName = v.vm.FirstName,
+                    LastName = v.vm.LastName,
+                    FatherName = v.vm.FatherName,
+                    MohallaId = v.vm.MohallaId,
+                    MohallaName = v.m.MohallaName,
+                    MobileNumber = v.vm.MobileNumber,
+
+                    // ⭐ Get all committee members of SAME Mohalla
+                    MohallaMembers = memberData
+                            .Where(md => md.MohallaId == v.vm.MohallaId)
+                            .Select(md => new MemberResponseModel
+                            {
+                                MemberId = md.Id,
+                                Name = md.Name,
+                                MobileNumber = md.MobileNumber
+                            })
+                            .ToList()
+                })
+                .ToList();
 
             return villageMembersWithMohalla;
         }

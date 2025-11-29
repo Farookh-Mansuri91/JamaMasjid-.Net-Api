@@ -25,6 +25,13 @@
         // The response model may include a simpler representation of the related entities like Mohalla and Member if needed
         public string? MohallaName { get; set; }  // You could replace this with actual properties from the Mohalla entity
 
-        public string? MemberName { get; set; }  // You can create a full name for the member based on the user ID or other attributes
+        // Committee Members List of the same Mohalla
+        public List<MemberResponseModel> MohallaMembers { get; set; } = new();
+    }
+    public class MemberResponseModel
+    {
+        public int MemberId { get; set; }
+        public string Name { get; set; } = null!;
+        public string? MobileNumber { get; set; }
     }
 }

@@ -18,5 +18,6 @@
         public decimal MasjidProgramAmount { get; set; }
         public string PaymentDate { get; set; }
         public int Year {  get; set; }
+        public string? PaidTo { get; set; }
     }
 }
